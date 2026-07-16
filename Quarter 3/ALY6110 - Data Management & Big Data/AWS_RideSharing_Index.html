@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Driver Language Match Demo</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-light">
+
+    <div class="container py-5">
+        <div class="row justify-content-center">
+            <div class="col-12 col-md-8 col-lg-6">
+
+                <!-- Find Driver Card -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">🚗 Find a Driver</h2>
+                        <div class="mb-3">
+                            <label for="language" class="form-label">Select your preferred language:</label>
+                            <select id="language" class="form-select">
+                                <option value="Tamil">Tamil</option>
+                                <option value="French">French</option>
+                                <option value="Spanish">Spanish</option>
+                                <option value="Arabic">Arabic</option>
+                            </select>
+                        </div>
+                        <button id="findBtn" class="btn btn-primary w-100">Find Driver</button>
+                        <div id="result" class="mt-3 fw-semibold"></div>
+                    </div>
+                </div>
+
+                <!-- Register Driver Card -->
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h2 class="card-title mb-4">📋 Register as a Driver</h2>
+                        <div class="mb-3">
+                            <label for="primaryLang" class="form-label">Primary Language:</label>
+                            <select id="primaryLang" class="form-select">
+                                <option value="English">English</option>
+                                <option value="Tamil">Tamil</option>
+                                <option value="French">French</option>
+                                <option value="Spanish">Spanish</option>
+                                <option value="Arabic">Arabic</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="additionalLangs" class="form-label">Additional Languages (comma
+                                separated):</label>
+                            <input type="text" id="additionalLangs" class="form-control"
+                                placeholder="e.g. Tamil, French"
+                                title="Enter languages separated by commas. Accepted: Tamil, French, Spanish, Arabic, English. Each word will be auto-capitalized." />
+                        </div>
+                        <div class="mb-3">
+                            <label for="locationZone" class="form-label">Location Zone:</label>
+                            <select id="locationZone" class="form-select">
+                                <option value="Toronto-Downtown">Toronto-Downtown</option>
+                                <option value="Toronto-North">Toronto-North</option>
+                                <option value="Toronto-South">Toronto-South</option>
+                                <option value="Toronto-East">Toronto-East</option>
+                                <option value="Toronto-West">Toronto-West</option>
+                            </select>
+                        </div>
+                        <button id="registerBtn" class="btn btn-success w-100">Register Driver</button>
+                        <div id="registerResult" class="mt-3 fw-semibold"></div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const FIND_API_URL = "https://qlyph8ye25.execute-api.us-east-2.amazonaws.com/prod/find-driver";
+        const REGISTER_API_URL = "https://qlyph8ye25.execute-api.us-east-2.amazonaws.com/prod/register-driver";
+
+        // Find Driver
+        document.getElementById("findBtn").addEventListener("click", async () => {
+            const lang = document.getElementById("language").value;
+            const resultEl = document.getElementById("result");
+            resultEl.className = "mt-3 fw-semibold text-secondary";
+            resultEl.textContent = "Checking availability...";
+            try {
+                const response = await fetch(FIND_API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ preferred_language: lang })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    const driverCount = data.matching_driver_count;
+                    const waitMinutes = data.estimated_wait_minutes;
+                    const waitText = waitMinutes ? ` Estimated wait time: ${waitMinutes} minute(s).` : "";
+                    resultEl.className = "mt-3 fw-semibold text-primary";
+                    resultEl.textContent =
+                        `${driverCount} available driver(s) found who speak ${lang}. Driver identity is hidden to prevent bias.${waitText}`;
+                } else {
+                    resultEl.className = "mt-3 fw-semibold text-danger";
+                    resultEl.textContent = "Error: Unable to check drivers.";
+                }
+            } catch (error) {
+                resultEl.className = "mt-3 fw-semibold text-danger";
+                resultEl.textContent = "Network error. Please try again.";
+            }
+        });
+
+        // Register Driver
+        document.getElementById("registerBtn").addEventListener("click", async () => {
+            const primaryLang = document.getElementById("primaryLang").value;
+            const additionalLangsRaw = document.getElementById("additionalLangs").value;
+            const locationZone = document.getElementById("locationZone").value;
+            const registerResultEl = document.getElementById("registerResult");
+
+            const validLanguages = ["Tamil", "French", "Spanish", "Arabic", "English"];
+
+            const additionalLangs = additionalLangsRaw
+                .split(",")
+                .map(l => l.trim())
+                .map(l => l.charAt(0).toUpperCase() + l.slice(1).toLowerCase())
+                .filter(l => l !== "");
+
+            // Validate each language against accepted list
+            const invalidLangs = additionalLangs.filter(l => !validLanguages.includes(l));
+            if (invalidLangs.length > 0) {
+                registerResultEl.className = "mt-3 fw-semibold text-danger";
+                registerResultEl.textContent =
+                    `Invalid language(s): ${invalidLangs.join(", ")}. Accepted: ${validLanguages.join(", ")}.`;
+                return;
+            }
+
+            // Validate no overlap between primary and additional languages
+            if (additionalLangs.includes(primaryLang)) {
+                registerResultEl.className = "mt-3 fw-semibold text-danger";
+                registerResultEl.textContent =
+                    `Primary language "${primaryLang}" cannot also be in additional languages.`;
+                return;
+            }
+
+            registerResultEl.className = "mt-3 fw-semibold text-secondary";
+            registerResultEl.textContent = "Registering driver...";
+            try {
+                const response = await fetch(REGISTER_API_URL, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        primary_language: primaryLang,
+                        additional_languages: additionalLangs,
+                        location_zone: locationZone
+                    })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    registerResultEl.className = "mt-3 fw-semibold text-success";
+                    registerResultEl.textContent =
+                        `Driver registered successfully! Driver ID: ${data.driver_id}`;
+                } else {
+                    registerResultEl.className = "mt-3 fw-semibold text-danger";
+                    registerResultEl.textContent = "Error: Unable to register driver.";
+                }
+            } catch (error) {
+                registerResultEl.className = "mt-3 fw-semibold text-danger";
+                registerResultEl.textContent = "Network error. Please try again.";
+            }
+        });
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
